@@ -1,0 +1,414 @@
+---
+title: "Final Project Proposal"
+author: "Ian Beller (1006837620)"
+date: "DUE: March 21st 2022"
+output: pdf_document
+urlcolor: blue
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r message=FALSE}
+library(tidyverse)
+library(latex2exp)
+library(gridExtra)
+library(dplyr)
+
+all.beijing <- read.csv('./LSTM-Multivariate_pollution.csv')
+glimpse(all.beijing)
+```
+
+```{r}
+drops <- c("snow", 'press', 'rain', 'wnd_dir')
+beijing <- all.beijing[ , !(names(all.beijing) %in% drops)]
+glimpse(beijing)
+
+```
+
+
+
+```{r}
+sum(is.na(beijing))
+```
+
+```{r}
+beijing_summ <- data.frame(do.call(cbind, lapply(beijing, summary)))
+names(beijing_summ)[names(beijing_summ) == "temp"] <- "temperature"
+names(beijing_summ)[names(beijing_summ) == "wnd_spd"] <- "wind_speed"
+beijing_summ[1, 1] = beijing$date[[1]]
+beijing_summ[2, 1] = beijing$date[[10950]]
+beijing_summ[3, 1] = beijing$date[[21900]]
+beijing_summ[4, 1] = '-'
+beijing_summ[5, 1] = beijing$date[[32850]]
+beijing_summ[6, 1] = beijing$date[[43800]]
+beijing_summ[nrow(beijing_summ) + 1,] = c('-', IQR(beijing$pollution),
+                                          IQR(beijing$temp), 
+                                          IQR(beijing$wnd_spd),
+                                          IQR(beijing$dew))
+row.names(beijing_summ)[7] <- 'Interquartile Range'
+beijing_summ[nrow(beijing_summ) + 1,] = c('-', sd(beijing$pollution), 
+                                          sd(beijing$temp), 
+                                          sd(beijing$wnd_spd), 
+                                          sd(beijing$dew))
+row.names(beijing_summ)[8] <- 'Standard Deveation'
+beijing_summ[nrow(beijing_summ) + 1,] = c('-', var(beijing$pollution), 
+                                          var(beijing$temp), 
+                                          var(beijing$wnd_spd), 
+                                          var(beijing$dew))
+row.names(beijing_summ)[9] <- 'Variance'
+beijing_summ[nrow(beijing_summ) + 1,] = c('-', mad(beijing$pollution), 
+                                          mad(beijing$temp), 
+                                          mad(beijing$wnd_spd), 
+                                          mad(beijing$dew))
+row.names(beijing_summ)[10] <- 'Median Absolute deviation'
+beijing_summ
+```
+
+```{r}
+beijing$date <- as.Date(beijing$date)
+sum.dates <- (aggregate(beijing["pollution"], by=beijing["date"], sum))[1]
+sum.polu <- (aggregate(beijing["pollution"], by=beijing["date"], sum))[2]
+sum.dew <- (aggregate(beijing["dew"], by=beijing["date"], sum))[2]
+sum.temp <- (aggregate(beijing["temp"], by=beijing["date"], sum))[2]
+sum.w_s <- (aggregate(beijing["wnd_spd"], by=beijing["date"], sum))[2]
+
+avg.beijing <- data.frame(sum.dates, sum.polu, sum.temp, sum.dew, sum.w_s)
+avg.beijing$pollution <- as.numeric(as.character(avg.beijing$pollution)) / 24
+avg.beijing$temp <- as.numeric(as.character(avg.beijing$temp)) / 24
+avg.beijing$dew <- as.numeric(as.character(avg.beijing$dew)) / 24
+avg.beijing$wnd_spd <- as.numeric(as.character(avg.beijing$wnd_spd)) / 24
+avg.beijing$date <- as.character(avg.beijing$date)
+```
+
+
+```{r}
+glimpse(avg.beijing)
+```
+
+```{r}
+avg.beijing_summ <- data.frame(do.call(cbind, lapply(avg.beijing, summary)))
+names(avg.beijing_summ)[names(avg.beijing_summ) == "temp"] <- "temperature"
+names(avg.beijing_summ)[names(avg.beijing_summ) == "wnd_spd"] <- "wind_speed"
+avg.beijing_summ[1, 1] = avg.beijing$date[[1]]
+avg.beijing_summ[2, 1] = avg.beijing$date[[456]]
+avg.beijing_summ[3, 1] = avg.beijing$date[[912]]
+avg.beijing_summ[4, 1] = '-'
+avg.beijing_summ[5, 1] = avg.beijing$date[[1369]]
+avg.beijing_summ[6, 1] = avg.beijing$date[[1825]]
+avg.beijing_summ[nrow(avg.beijing_summ) + 1,] = c('-', 
+                                                  IQR(avg.beijing$pollution), 
+                                                  IQR(avg.beijing$temp), 
+                                                  IQR(avg.beijing$wnd_spd), 
+                                                  IQR(avg.beijing$dew))
+row.names(avg.beijing_summ)[7] <- 'Interquartile Range'
+avg.beijing_summ[nrow(avg.beijing_summ) + 1,] = c('-', 
+                                                  sd(avg.beijing$pollution), 
+                                                  sd(avg.beijing$temp),
+                                                  sd(avg.beijing$wnd_spd), 
+                                                  sd(avg.beijing$dew))
+row.names(avg.beijing_summ)[8] <- 'Standard Deveation'
+avg.beijing_summ[nrow(avg.beijing_summ) + 1,] = c('-', 
+                                                  var(avg.beijing$pollution),
+                                                  var(avg.beijing$temp), 
+                                                  var(avg.beijing$wnd_spd), 
+                                                  var(avg.beijing$dew))
+row.names(avg.beijing_summ)[9] <- 'Variance'
+avg.beijing_summ[nrow(avg.beijing_summ) + 1,] = c('-', 
+                                                  mad(avg.beijing$pollution), 
+                                                  mad(avg.beijing$temp), 
+                                                  mad(avg.beijing$wnd_spd), 
+                                                  mad(avg.beijing$dew))
+row.names(avg.beijing_summ)[10] <- 'Median Absolute deviation'
+avg.beijing_summ
+```
+
+
+
+```{r fig.dim=c(8, 5), fig.align="center"}
+boxpollution <- ggplot(beijing)+
+  geom_boxplot(aes(x=pollution), outlier.colour="red", outlier.shape=20,
+                outlier.size=2)  + 
+  stat_boxplot(geom ='errorbar',  aes(x=pollution), width=0.6) +
+  labs(x='Pollution level (in levels of PM2.5 concentration)', 
+       title='Pollution levels per hour in Beijing between 2010-2015', 
+       subtitle='43800 entries registered by the U.S. embassy in Beijing') +
+  scale_y_continuous(labels=NULL, breaks=NULL) +
+  theme_gray()
+
+boxtemp <- ggplot(beijing)+
+  geom_boxplot(aes(x=temp), outlier.colour="red", outlier.shape=20,
+                outlier.size=2)  + 
+  stat_boxplot(geom ='errorbar',  aes(x=temp), width=0.6) +
+  labs(x='Temperature (in Celsius)', 
+       title='Temperature per hour in Beijing between 2010-2015', 
+       subtitle='43800 entries registered by the U.S. embassy in Beijing') +
+  scale_y_continuous(labels=NULL, breaks=NULL) +
+  theme_gray()
+
+boxwspd <- ggplot(beijing)+
+  geom_boxplot(aes(x=wnd_spd), outlier.colour="red", outlier.shape=20,
+                outlier.size=2)  + 
+  stat_boxplot(geom ='errorbar',  aes(x=wnd_spd), width=0.6) +
+  labs(x='wind speed (in knots)', 
+       title='wind speed in Beijing between 2010-2015', 
+       subtitle='43800 entries registered by the U.S. embassy in Beijing') +
+  scale_y_continuous(labels=NULL, breaks=NULL) +
+  theme_gray()
+
+grid.arrange(grobs = list(boxpollution, boxtemp, boxwspd), nrows=3)
+```
+
+
+
+```{r warning=FALSE, fig.align="center", fig.dim=c(12, 9)}
+
+pollution_qq <- avg.beijing %>% 
+  ggplot(aes(sample= pollution)) +
+  geom_qq()+
+  geom_qq_line() +
+  labs(x = 'N(0, 1) percentiles',
+       y = '2.5PM Percentiles', 
+       title = 'Normal QQ plot of Beijing pollution \nlevels from 2010 to 2015') + 
+  theme_light()
+
+temp_qq <- avg.beijing %>% 
+  ggplot(aes(sample= temp)) +
+  geom_qq()+
+  geom_qq_line() +
+  labs(x = 'N(0, 1) percentiles',
+       y = 'Temperature Percentiles', 
+       title = 'Normal QQ plot of Beijing temperature \nlevels (in ªC) from 2010 to 2015') + 
+  theme_light()
+
+dew_qq <- avg.beijing %>% 
+  ggplot(aes(sample= dew)) +
+  geom_qq()+
+  geom_qq_line() +
+  labs(x = 'N(0, 1) percentiles',
+       y = 'Dew points Percentiles', 
+       title = 'Normal QQ plot of Beijing dew \npoints from 2010 to 2015') + 
+  theme_light()
+
+ws_qq <- avg.beijing %>% 
+  ggplot(aes(sample= wnd_spd)) +
+  geom_qq()+
+  geom_qq_line() +
+  labs(x = 'N(0, 1) percentiles',
+       y = 'Wind speed Percentiles', 
+       title = 'Normal QQ plot of Beijing wind \nspeed from 2010 to 2015') + 
+  theme_light()
+grid.arrange(grobs = list(pollution_qq, temp_qq, dew_qq, ws_qq), nrows=2, ncols= 2)
+```
+
+
+
+
+
+```{r}
+model <- lm(pollution ~ temp + wnd_spd + dew, data = avg.beijing)
+summary(model)
+```
+```{r}
+b0 <- 181.4200
+se_b0 <- 3.8240
+b1 <- -7.3376
+se_b1 <- 0.3213
+b2 <- -0.2832
+se_b2 <- 0.0403
+b3 <- 5.8957
+se_b3 <- 0.2714
+
+print('b0')
+lb <- b0 - qt(0.025, 1821) * se_b0
+ub <- b0 + qt(0.025, 1821) * se_b0
+quantile(c(ub, lb), probs= c(0.975, 0.025))
+
+print('b1')
+lb <- b1 - qt(0.025, 1821) * se_b1
+ub <- b1 + qt(0.025, 1821) * se_b1
+quantile(c(ub, lb), probs= c(0.975, 0.025))
+
+print('b2')
+lb <- b2 - qt(0.025, 1821) * se_b2
+ub <- b2 + qt(0.025, 1821) * se_b2
+quantile(c(ub, lb), probs= c(0.975, 0.025))
+
+print('b3')
+lb <- b3 - qt(0.025, 1821) * se_b3
+ub <- b3 + qt(0.025, 1821) * se_b3
+quantile(c(ub, lb), probs= c(0.975, 0.025))
+```
+
+
+```{r}
+avg.beijing$month<- format(as.Date(avg.beijing$date), "%m")
+
+X <- avg.beijing[avg.beijing$month <= '05',]
+spring <- X[X$month >= '04',]
+
+X <- avg.beijing[avg.beijing$month <= '08',]
+summer <- X[X$month >= '06',]
+
+X <- avg.beijing[avg.beijing$month <= '10',]
+autumn  <- X[X$month >= '09',]
+
+Y <- avg.beijing[avg.beijing$month > '10',]
+X <- avg.beijing[avg.beijing$month <= '03',]
+winter  <- rbind(X, Y)
+
+
+glimpse(spring)
+glimpse(summer)
+glimpse(autumn)
+glimpse(winter)
+```
+
+
+```{r}
+model_spring <- lm(pollution ~ temp + wnd_spd + dew, data = spring)
+summary(model_spring)
+```
+```{r}
+b0 <- 127.7242
+se_b0 <- 10.0182
+b1 <- -3.2278
+se_b1 <- 0.5734
+b2 <- -0.1340
+se_b2 <- 0.0633
+b3 <- 4.0631
+se_b3 <- 0.3782
+
+print('b0')
+lb <- b0 - qt(0.025, 301) * se_b0
+ub <- b0 + qt(0.025, 301) * se_b0
+quantile(c(ub, lb), probs= c(0.975, 0.025))
+
+print('b1')
+lb <- b1 - qt(0.025, 301) * se_b1
+ub <- b1 + qt(0.025, 301) * se_b1
+quantile(c(ub, lb), probs= c(0.975, 0.025))
+
+print('b2')
+lb <- b2 - qt(0.025, 301) * se_b2
+ub <- b2 + qt(0.025, 301) * se_b2
+quantile(c(ub, lb), probs= c(0.975, 0.025))
+
+print('b3')
+lb <- b3 - qt(0.025, 301) * se_b3
+ub <- b3 + qt(0.025, 301) * se_b3
+quantile(c(ub, lb), probs= c(0.975, 0.025))
+
+```
+
+```{r}
+model_winter <- lm(pollution ~ temp + wnd_spd + dew, data = winter)
+summary(model_winter)
+```
+```{r}
+b0 <- 222.1861
+se_b0 <- 5.8442
+b1 <- -6.4398
+se_b1 <- 0.5755
+b2 <- -0.2547
+se_b2 <- 0.0495
+b3 <- 9.0277
+se_b3 <- 0.4614
+
+print('b0')
+lb <- b0 - qt(0.025, 751) * se_b0
+ub <- b0 + qt(0.025, 751) * se_b0
+quantile(c(ub, lb), probs= c(0.975, 0.025))
+
+print('b1')
+lb <- b1 - qt(0.025, 751) * se_b1
+ub <- b1 + qt(0.025, 751) * se_b1
+quantile(c(ub, lb), probs= c(0.975, 0.025))
+
+print('b2')
+lb <- b2 - qt(0.025, 751) * se_b2
+ub <- b2 + qt(0.025, 751) * se_b2
+quantile(c(ub, lb), probs= c(0.975, 0.025))
+
+print('b3')
+lb <- b3 - qt(0.025, 751) * se_b3
+ub <- b3 + qt(0.025, 751) * se_b3
+quantile(c(ub, lb), probs= c(0.975, 0.025))
+```
+
+
+```{r}
+model_autumn <- lm(pollution ~ temp + wnd_spd + dew, data = autumn)
+summary(model_autumn)
+```
+```{r}
+model_autumn <- lm(pollution ~ temp + dew, data = autumn)
+summary(model_autumn)
+```
+```{r}
+b0 <- 211.105
+se_b0 <- 17.455
+b1 <- -13.134
+se_b1 <- 1.385
+b3 <- 11.536
+se_b3 <- 0.953
+
+print('b0')
+lb <- b0 - qt(0.025, 302) * se_b0
+ub <- b0 + qt(0.025, 302) * se_b0
+quantile(c(ub, lb), probs= c(0.975, 0.025))
+
+print('b1')
+lb <- b1 - qt(0.025, 302) * se_b1
+ub <- b1 + qt(0.025, 302) * se_b1
+quantile(c(ub, lb), probs= c(0.975, 0.025))
+
+print('b3')
+lb <- b3 - qt(0.025, 302) * se_b3
+ub <- b3 + qt(0.025, 302) * se_b3
+quantile(c(ub, lb), probs= c(0.975, 0.025))
+```
+
+
+```{r}
+model_summer <- lm(pollution ~ temp + dew + wnd_spd , data = summer)
+summary(model_summer)
+```
+We notice that wnd_spd parameter is statistically insignificant since it has a
+p-value above 0.05. We also see that the intercept value is also statistically 
+insignificant and this skews with our model since we do not have enough evidence
+to reject the null hypothesis for our variables which means that we do not have
+enough evidence to assume our regression line is not horizontal/ there is no 
+relationship. Hence to have the model with the most precision when estimating 
+pollution levels in summer, we will disregard the parameter wnd_spd. Hence our 
+statistical summary for our new model is 
+```{r}
+model_summer <- lm(pollution ~ temp + dew, data = summer)
+summary(model_summer)
+```
+In the new regression model, we have the same issue as our regression model but
+now the temperature is statistically insignificant which keeps the intercept 
+also statistically insignificant. Hence we will re-run another regression model 
+but now disregard temperature as well.
+
+```{r}
+model_summer <- lm(pollution ~dew, data = summer)
+summary(model_summer)
+```
+```{r}
+b0 <- -47.258
+se_b0 <- 11.318
+b3 <- 7.086
+se_b3 <- 0.594
+
+print('b0')
+lb <- b0 - qt(0.025, 458) * se_b0
+ub <- b0 + qt(0.025, 458) * se_b0
+quantile(c(ub, lb), probs= c(0.975, 0.025))
+
+print('b3')
+lb <- b3 - qt(0.025, 458) * se_b3
+ub <- b3 + qt(0.025, 458) * se_b3
+quantile(c(ub, lb), probs= c(0.975, 0.025))
+```
+
+
